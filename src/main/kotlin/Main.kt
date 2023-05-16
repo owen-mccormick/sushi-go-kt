@@ -2,7 +2,7 @@ import java.util.*
 
 fun main() {
     // Builds the deck.
-    // Is there a better way to do this?
+    // TODO - Is there a better way to do this?
     val deck: MutableList<Card> = MutableList(108) {
         when (it) {
             in 0..13 -> Card.TEMPURA
@@ -33,6 +33,7 @@ fun main() {
     val humans = readln().toInt()
     print("Number of bots: ")
     val bots = readln().toInt()
+    if (humans + bots < 3) throw Exception("Too few players")
     println("Humans: $humans")
     println("Bots: $bots")
 }
@@ -52,22 +53,59 @@ enum class Card {
 }
 
 abstract class Player {
-
     var tableau = mutableListOf<Card>()
-    protected var unusedWasabi = 0
+    private var unusedWasabi = 0
     var points = 0
-    abstract fun processTurn(hand: MutableList<Card>)
+    abstract fun processTurn(hand: MutableList<Card>): Card
+
+    // Nigiri point values are fixed and can be scored right away.
+    protected fun score(selection: Card) {
+        tableau.add(selection)
+        points += when (selection) {
+            Card.EGG_NIGIRI -> if (unusedWasabi > 0) {unusedWasabi--; 3} else 1
+            Card.SALMON_NIGIRI -> if (unusedWasabi > 0) {unusedWasabi--; 6} else 3
+            Card.SQUID_NIGIRI -> if (unusedWasabi > 0) {unusedWasabi--; 9} else 3
+            Card.WASABI -> {unusedWasabi++; 0}
+            else -> 0
+        }
+    }
 }
 
 class Human : Player() {
-    override fun processTurn(hand: MutableList<Card>) {
-        TODO("Not yet implemented")
+    override fun processTurn(hand: MutableList<Card>): Card {
+        hand.forEachIndexed { index, card ->  println("$index: $card") }
+        print("Card choice: ")
+        return hand.removeAt(readln().toInt()).also { score(it) }
     }
-
 }
 
 class Bot : Player() {
-    override fun processTurn(hand: MutableList<Card>) {
-        TODO("Not yet implemented")
+    override fun processTurn(hand: MutableList<Card>): Card {
+        // TODO - Make the bot better
+        return hand.removeAt(0).also { score(it) }
+    }
+}
+
+fun playRound(deck: MutableList<Card>, players: List<Player>) {
+    val handSize = 12 - players.size
+    val pool: List<MutableList<Card>> = List(players.size) {
+        deck.slice(it * handSize until (it + 1) * handSize).toMutableList()
+    }
+    repeat(players.size * handSize) { deck.removeAt(0) }
+    for (list in pool) assert(list.size == handSize)
+
+    var handOffset = 0
+    while (pool[0].size > 0) {
+        // Play a subround
+        val subroundSelections: MutableList<Card> = mutableListOf()
+        for (i in players.indices) subroundSelections.add(players[i].processTurn(pool[(i + handOffset) % (pool.size)]))
+        subroundSelections.forEachIndexed { index, card -> println("Player $index selected $card.")}
+        handOffset++
+    }
+
+    // Score the round
+    for (player in players) {
+        player.points += 5 * (player.tableau.count { it == Card.TEMPURA } / 2)
+        player.points += 10 * (player.tableau.count { it == Card.SASHIMI } / 3)
     }
 }
